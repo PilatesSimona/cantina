@@ -463,7 +463,7 @@ function closeOverlay(){ document.getElementById('overlay-root').innerHTML=''; }
 function showOverlay(html, isMenu=false){
   const root=document.getElementById('overlay-root');
   root.innerHTML=`<div class="${isMenu?'menu-overlay':'overlay'}" id="overlay-bg">${html}</div>`;
-  root.querySelector('#overlay-bg').addEventListener('click', e=>{ if(e.target.id==='overlay-bg') closeOverlay(); });
+  root.querySelector('#overlay-bg').addEventListener('click', e=>{ if(e.target===root.querySelector('#overlay-bg')) closeOverlay(); });
 }
 
 // ─── STARS (stable DOM node, event delegation) ───────────────
@@ -487,7 +487,7 @@ function attachStarEvents(){
 function formSheet(){
   return `<div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-header"><span class="sheet-title">${editId?'Modifica vino':'Nuovo vino'}</span><button class="close-btn" id="form-close">✕</button></div>
+    <div class="sheet-header"><span class="sheet-title">${editId?'Modifica vino':'Nuovo vino'}</span><button class="close-btn" data-action="close">✕</button></div>
     <div class="sheet-body">
       <div class="form-group"><label class="form-label">Nome vino *</label><input id="f-name" class="form-input" placeholder="es. Brunello di Montalcino" value="${formData.name||''}"></div>
       <div class="form-row">
@@ -511,7 +511,7 @@ function formSheet(){
       <div class="form-group"><label class="form-label">Valutazione personale</label>${starsWidget()}</div>
       <div class="form-group"><label class="form-label">Abbinamenti cibo</label><input id="f-pairing" class="form-input" placeholder="es. Bistecca, formaggi stagionati" value="${formData.pairing||''}"></div>
       <div class="form-group"><label class="form-label">Note di degustazione</label><textarea id="f-notes" class="form-textarea" placeholder="Colore, profumo, gusto, persistenza…">${formData.notes||''}</textarea></div>
-      <div class="btn-row"><button class="btn btn-ghost" id="form-cancel">Annulla</button><button class="btn btn-primary" id="form-submit">${editId?'Salva':'Aggiungi'}</button></div>
+      <div class="btn-row"><button class="btn btn-ghost" data-action="close">Annulla</button><button class="btn btn-primary" data-action="form-submit">${editId?'Salva':'Aggiungi'}</button></div>
     </div>
   </div>`;
 }
@@ -556,7 +556,7 @@ function drinkSheet(id){
   const w=wines.find(x=>x.id===id); if(!w) return '';
   return `<div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-header"><span class="sheet-title">🥂 Segna come bevuto</span><button class="close-btn" id="drink-close">✕</button></div>
+    <div class="sheet-header"><span class="sheet-title">🥂 Segna come bevuto</span><button class="close-btn" data-action="close">✕</button></div>
     <div class="sheet-body">
       <div style="background:var(--paper2);border-radius:10px;padding:.85rem 1rem;margin-bottom:1rem;border-left:3px solid var(--wine)">
         <div style="font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600">${w.name}</div>
@@ -567,22 +567,21 @@ function drinkSheet(id){
         <div class="form-group"><label class="form-label">Data</label><input id="d-date" class="form-input" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
       </div>
       <div class="form-group"><label class="form-label">Note occasione</label><textarea id="d-notes" class="form-textarea" placeholder="Con chi, per quale occasione…"></textarea></div>
-      <div class="btn-row"><button class="btn btn-ghost" id="drink-cancel">Annulla</button><button class="btn btn-drink" id="drink-submit">🥂 Segna bevuto</button></div>
+      <div class="btn-row"><button class="btn btn-ghost" data-action="close">Annulla</button><button class="btn btn-drink" data-action="drink-submit">🥂 Segna bevuto</button></div>
     </div>
   </div>`;
 }
 
-// Single unified listener — uses closest() so clicks on child elements work too
+// Single unified listener — uses data-action, never confused by ancestor ids
 document.getElementById('overlay-root').addEventListener('click', async e=>{
-  const btn = e.target.closest('[id]');
-  if(!btn) return;
-  const id = btn.id;
+  const el = e.target.closest('[data-action]');
+  if(!el) return;
+  const action = el.dataset.action;
 
-  if(id==='detail-close'||id==='drink-close'||id==='drink-cancel'||id==='form-close'||id==='form-cancel'||id==='menu-close'){ closeOverlay(); return; }
+  if(action==='close'){ closeOverlay(); return; }
+  if(action==='form-submit'){ submitForm(); return; }
 
-  if(id==='form-submit'){ submitForm(); return; }
-
-  if(id==='drink-submit'){
+  if(action==='drink-submit'){
     const w=wines.find(x=>x.id===drinkId); if(!w) return;
     const qty=+document.getElementById('d-qty').value||1;
     const dateLabel=document.getElementById('d-date').value;
@@ -598,24 +597,23 @@ document.getElementById('overlay-root').addEventListener('click', async e=>{
     return;
   }
 
-  if(id==='detail-edit'){ openEdit(detailId); return; }
-  if(id==='detail-drink'){ openDrink(detailId); return; }
-  if(id==='detail-delete'){
+  if(action==='detail-edit'){ openEdit(detailId); return; }
+  if(action==='detail-drink'){ openDrink(detailId); return; }
+  if(action==='detail-delete'){
     if(!confirm('Eliminare questo vino?')) return;
     const wid=detailId; closeOverlay();
     try{ await fbDel('wines/'+wid); showToast('Vino eliminato'); }catch(err){ showToast('Errore'); }
     return;
   }
-  if(id==='consumed-delete'){
+  if(action==='consumed-delete'){
     if(!confirm('Rimuovere questa voce?')) return;
-    const cid=btn.dataset.id; closeOverlay();
+    const cid=el.dataset.id; closeOverlay();
     try{ await fbDel('consumed/'+cid); showToast('Voce rimossa'); }catch(err){ showToast('Errore'); }
     return;
   }
-
-  if(id==='menu-export'){ exportJSON(); closeOverlay(); return; }
-  if(id==='menu-import'){ closeOverlay(); setTimeout(importJSON,100); return; }
-  if(id==='menu-pwd'){ changePwd(); return; }
+  if(action==='menu-export'){ exportJSON(); closeOverlay(); return; }
+  if(action==='menu-import'){ closeOverlay(); setTimeout(importJSON,100); return; }
+  if(action==='menu-pwd'){ changePwd(); return; }
 });
 
 // ─── DETAIL SHEETS ───────────────────────────────────────────
@@ -624,7 +622,7 @@ function detailSheet(id){
   const hist=consumed.filter(c=>c.wineId===id).sort((a,b)=>b.date-a.date);
   return `<div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-header"><span class="sheet-title">Scheda vino</span><button class="close-btn" id="detail-close">✕</button></div>
+    <div class="sheet-header"><span class="sheet-title">Scheda vino</span><button class="close-btn" data-action="close">✕</button></div>
     <div class="sheet-body">
       <div class="detail-hero">
         <div class="detail-icon">${ICONS[w.type]||'🍶'}</div>
@@ -642,9 +640,9 @@ function detailSheet(id){
       ${w.notes?`<div class="detail-section"><div class="section-label">📝 Note di degustazione</div><div class="detail-text">${w.notes}</div></div>`:''}
       ${hist.length?`<div class="detail-section"><div class="section-label">🥂 Storico consumi (${hist.length})</div>${hist.map(c=>`<div class="history-item"><div><div class="history-date">${c.dateLabel||fmtDate(c.date)}</div>${c.notes?`<div style="font-size:12px;color:var(--muted)">${c.notes}</div>`:''}</div><div class="history-qty">🥂 ${c.qty}</div></div>`).join('')}</div>`:''}
       <div class="btn-row">
-        <button class="btn btn-danger" id="detail-delete">Elimina</button>
-        <button class="btn btn-ghost" id="detail-edit">Modifica</button>
-        <button class="btn btn-drink" id="detail-drink">🥂 Bevi</button>
+        <button class="btn btn-danger" data-action="detail-delete">Elimina</button>
+        <button class="btn btn-ghost" data-action="detail-edit">Modifica</button>
+        <button class="btn btn-drink" data-action="detail-drink">🥂 Bevi</button>
       </div>
     </div>
   </div>`;
@@ -656,7 +654,7 @@ function consumedDetailSheet(id){
   const w=consumed.find(x=>x.id===id); if(!w) return '';
   return `<div class="sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-header"><span class="sheet-title">Dettaglio consumo</span><button class="close-btn" id="detail-close">✕</button></div>
+    <div class="sheet-header"><span class="sheet-title">Dettaglio consumo</span><button class="close-btn" data-action="close">✕</button></div>
     <div class="sheet-body">
       <div class="detail-hero">
         <div class="detail-icon">${ICONS[w.type]||'🍶'}</div>
@@ -670,8 +668,8 @@ function consumedDetailSheet(id){
       </div>
       ${w.notes?`<div class="detail-section"><div class="section-label">📝 Note occasione</div><div class="detail-text">${w.notes}</div></div>`:''}
       <div class="btn-row">
-        <button class="btn btn-danger" id="consumed-delete" data-id="${w.id}">Rimuovi</button>
-        <button class="btn btn-ghost" id="detail-close">Chiudi</button>
+        <button class="btn btn-danger" data-action="consumed-delete" data-id="${w.id}">Rimuovi</button>
+        <button class="btn btn-ghost" data-action="close">Chiudi</button>
       </div>
     </div>
   </div>`;
@@ -681,10 +679,10 @@ function consumedDetailSheet(id){
 function menuSheet(){
   return `<div class="menu-sheet">
     <div class="menu-title">Gestione cantina</div>
-    <div class="menu-item" id="menu-export"><span class="menu-icon">📤</span> Esporta dati (JSON)</div>
-    <div class="menu-item" id="menu-import"><span class="menu-icon">📥</span> Importa dati (JSON)</div>
-    <div class="menu-item" id="menu-pwd"><span class="menu-icon">🔑</span> Cambia password</div>
-    <div class="menu-item" id="menu-close"><span class="menu-icon">✕</span> Chiudi</div>
+    <div class="menu-item" data-action="menu-export"><span class="menu-icon">📤</span> Esporta dati (JSON)</div>
+    <div class="menu-item" data-action="menu-import"><span class="menu-icon">📥</span> Importa dati (JSON)</div>
+    <div class="menu-item" data-action="menu-pwd"><span class="menu-icon">🔑</span> Cambia password</div>
+    <div class="menu-item" data-action="close"><span class="menu-icon">✕</span> Chiudi</div>
   </div>`;
 }
 
