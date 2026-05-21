@@ -463,7 +463,6 @@ function closeOverlay(){ document.getElementById('overlay-root').innerHTML=''; }
 function showOverlay(html, isMenu=false){
   const root=document.getElementById('overlay-root');
   root.innerHTML=`<div class="${isMenu?'menu-overlay':'overlay'}" id="overlay-bg">${html}</div>`;
-  root.querySelector('#overlay-bg').addEventListener('click', e=>{ if(e.target===root.querySelector('#overlay-bg')) closeOverlay(); });
 }
 
 // ─── STARS (stable DOM node, event delegation) ───────────────
@@ -574,6 +573,8 @@ function drinkSheet(id){
 
 // Single unified listener — uses data-action, never confused by ancestor ids
 document.getElementById('overlay-root').addEventListener('click', async e=>{
+  // close on backdrop click
+  if(e.target.id==='overlay-bg'){ closeOverlay(); return; }
   const el = e.target.closest('[data-action]');
   if(!el) return;
   const action = el.dataset.action;
