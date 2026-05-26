@@ -294,27 +294,26 @@ async function fbDel(path){ setSyncDot('syncing'); await remove(ref(db,path)); }
 
 // ─── INIT + LISTENERS ────────────────────────────────────────
 function init(){
-  // Login anonimo silenzioso — necessario per le regole di sicurezza Firebase
   const auth = getAuth(fbApp);
-  signInAnonymously(auth).catch(()=> showToast('Errore autenticazione Firebase'));
-
-  onValue(winesRef, snap=>{
-    const d=snap.val();
-    wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
-    wines.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-    setSyncDot('online'); renderContent();
-  }, ()=>{ setSyncDot('error'); showToast('Errore connessione'); });
-
-  onValue(consumedRef, snap=>{
-    const d=snap.val();
-    consumed=d?Object.entries(d).map(([id,c])=>({...c,id})):[];
-    consumed.sort((a,b)=>(b.date||0)-(a.date||0));
-    renderContent();
-  });
-
   buildShell();
-
   if(sessionStorage.getItem('cauth')==='1') renderContent();
+
+  // Prima il login anonimo, poi i listener — altrimenti Firebase rifiuta le letture
+  signInAnonymously(auth).then(()=>{
+    onValue(winesRef, snap=>{
+      const d=snap.val();
+      wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
+      wines.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+      setSyncDot('online'); renderContent();
+    }, ()=>{ setSyncDot('error'); showToast('Errore connessione'); });
+
+    onValue(consumedRef, snap=>{
+      const d=snap.val();
+      consumed=d?Object.entries(d).map(([id,c])=>({...c,id})):[];
+      consumed.sort((a,b)=>(b.date||0)-(a.date||0));
+      renderContent();
+    });
+  }).catch(()=> showToast('Errore autenticazione Firebase'));
 }
 
 if(sessionStorage.getItem('cauth')==='1') init();
