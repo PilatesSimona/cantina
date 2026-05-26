@@ -189,6 +189,7 @@ body{font-family:'Crimson Pro',Georgia,serif;background:var(--ink);color:var(--i
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, onValue, push, set, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ─── FIREBASE ────────────────────────────────────────────────
 const fbApp = initializeApp({
@@ -293,6 +294,10 @@ async function fbDel(path){ setSyncDot('syncing'); await remove(ref(db,path)); }
 
 // ─── INIT + LISTENERS ────────────────────────────────────────
 function init(){
+  // Login anonimo silenzioso — necessario per le regole di sicurezza Firebase
+  const auth = getAuth(fbApp);
+  signInAnonymously(auth).catch(()=> showToast('Errore autenticazione Firebase'));
+
   onValue(winesRef, snap=>{
     const d=snap.val();
     wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
@@ -473,7 +478,6 @@ function starButtons(active){
   return Array.from({length:5},(_,i)=>`<span class="s-star${i<active?' lit':''}" data-star="${i+1}">★</span>`).join('');
 }
 function attachStarEvents(){
-  // Use requestAnimationFrame to ensure DOM is ready after showOverlay injection
   requestAnimationFrame(()=>{
     const c=document.getElementById('star-container'); if(!c) return;
     c.addEventListener('mouseover', e=>{ const s=e.target.closest('[data-star]'); if(s){ c.innerHTML=starButtons(+s.dataset.star); } });
@@ -517,7 +521,6 @@ function formSheet(){
 
 function attachFormEvents(){
   attachStarEvents();
-  // type pills — local delegation since not in overlay-root listener
   requestAnimationFrame(()=>{
     const pills=document.getElementById('type-pills'); if(!pills) return;
     pills.addEventListener('click', e=>{
@@ -648,8 +651,6 @@ function detailSheet(id){
     </div>
   </div>`;
 }
-
-// single listener below handles all overlay clicks
 
 function consumedDetailSheet(id){
   const w=consumed.find(x=>x.id===id); if(!w) return '';
