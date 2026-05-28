@@ -21,16 +21,20 @@
 html,body{height:100%;overflow:hidden}
 body{font-family:'Crimson Pro',Georgia,serif;background:var(--ink);color:var(--ink);font-size:16px;line-height:1.5}
 
-/* LOCK */
-#lock-screen{position:fixed;inset:0;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:2rem}
-.lock-icon{font-size:52px;margin-bottom:1.5rem}
-.lock-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--paper);margin-bottom:.4rem}
-.lock-subtitle{font-size:14px;color:rgba(247,242,236,.45);margin-bottom:2rem}
-.lock-input{width:100%;max-width:280px;padding:13px 16px;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.07);color:var(--paper);font-family:'Crimson Pro',serif;font-size:18px;text-align:center;letter-spacing:.2em;margin-bottom:1rem}
-.lock-input:focus{outline:none;border-color:var(--gold-light)}
-.lock-btn{width:100%;max-width:280px;padding:13px;background:var(--wine);color:var(--paper);border:none;border-radius:10px;font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;cursor:pointer}
-.lock-error{font-size:13px;color:#e57373;margin-top:.75rem;min-height:20px}
-.lock-hint{font-size:12px;color:rgba(247,242,236,.25);margin-top:1.5rem;text-align:center}
+/* AUTH SCREEN */
+#auth-screen{position:fixed;inset:0;background:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;padding:2rem}
+.auth-icon{font-size:52px;margin-bottom:1.5rem}
+.auth-title{font-family:'Cormorant Garamond',serif;font-size:28px;font-weight:600;color:var(--paper);margin-bottom:.4rem}
+.auth-subtitle{font-size:14px;color:rgba(247,242,236,.45);margin-bottom:2rem;text-align:center}
+.auth-form{width:100%;max-width:300px;display:flex;flex-direction:column;gap:10px}
+.auth-input{width:100%;padding:13px 16px;border:1px solid rgba(255,255,255,.15);border-radius:10px;background:rgba(255,255,255,.07);color:var(--paper);font-family:'Crimson Pro',serif;font-size:16px;letter-spacing:.02em}
+.auth-input:focus{outline:none;border-color:var(--gold-light)}
+.auth-input::placeholder{color:rgba(255,255,255,.3)}
+.auth-btn{width:100%;padding:13px;background:var(--wine);color:var(--paper);border:none;border-radius:10px;font-family:'Cormorant Garamond',serif;font-size:18px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:4px}
+.auth-btn:active{background:var(--wine-light)}
+.auth-btn.secondary{background:transparent;border:1px solid rgba(255,255,255,.15);font-size:15px;margin-top:0}
+.auth-error{font-size:13px;color:#e57373;min-height:18px;text-align:center}
+.auth-divider{text-align:center;color:rgba(255,255,255,.2);font-size:13px;margin:4px 0}
 
 /* APP SHELL */
 #app{height:100dvh;display:flex;flex-direction:column;background:var(--paper);max-width:480px;margin:0 auto;position:relative;overflow:hidden}
@@ -174,14 +178,18 @@ body{font-family:'Crimson Pro',Georgia,serif;background:var(--ink);color:var(--i
 </head>
 <body>
 
-<div id="lock-screen">
-  <div class="lock-icon">🍷</div>
-  <div class="lock-title">La mia Cantina</div>
-  <div class="lock-subtitle">Inserisci la password per accedere</div>
-  <input class="lock-input" type="password" id="lock-pwd" placeholder="••••••">
-  <button class="lock-btn" id="lock-submit">Entra</button>
-  <div class="lock-error" id="lock-err"></div>
-  <div class="lock-hint">Password predefinita: <strong style="color:rgba(255,255,255,.4)">cantina</strong></div>
+<div id="auth-screen">
+  <div class="auth-icon">🍷</div>
+  <div class="auth-title">La mia Cantina</div>
+  <div class="auth-subtitle" id="auth-subtitle">Accedi alla tua cantina</div>
+  <div class="auth-form">
+    <input class="auth-input" type="email" id="auth-email" placeholder="Email" autocomplete="email" inputmode="email">
+    <input class="auth-input" type="password" id="auth-pwd" placeholder="Password" autocomplete="current-password">
+    <div class="auth-error" id="auth-err"></div>
+    <button class="auth-btn" id="auth-submit">Accedi</button>
+    <div class="auth-divider">oppure</div>
+    <button class="auth-btn secondary" id="auth-register">Registrati</button>
+  </div>
 </div>
 
 <div id="app" style="display:none"></div>
@@ -189,7 +197,7 @@ body{font-family:'Crimson Pro',Georgia,serif;background:var(--ink);color:var(--i
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, onValue, push, set, remove } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 // ─── FIREBASE ────────────────────────────────────────────────
 const fbApp = initializeApp({
@@ -205,36 +213,69 @@ const db = getDatabase(fbApp);
 const winesRef  = ref(db,'wines');
 const consumedRef = ref(db,'consumed');
 
-// ─── PASSWORD ────────────────────────────────────────────────
-function hash(s){ let h=0; for(const c of s) h=(Math.imul(31,h)+c.charCodeAt(0))|0; return String(h); }
-let pwdHash = localStorage.getItem('cpwdh') || hash('cantina');
+// ─── AUTH ─────────────────────────────────────────────────────
+const auth = getAuth(fbApp);
+let currentUser = null;
 
-function checkPwd(){
-  const v = document.getElementById('lock-pwd').value;
-  if(hash(v)===pwdHash){
-    sessionStorage.setItem('cauth','1');
-    document.getElementById('lock-screen').style.display='none';
+function showAuthError(msg){
+  const el=document.getElementById('auth-err');
+  if(el) el.textContent=msg;
+}
+
+function authErrorMsg(code){
+  const map={
+    'auth/invalid-email':'Email non valida',
+    'auth/user-not-found':'Nessun account con questa email',
+    'auth/wrong-password':'Password errata',
+    'auth/email-already-in-use':'Email già registrata',
+    'auth/weak-password':'Password troppo debole (min 6 caratteri)',
+    'auth/invalid-credential':'Email o password errati',
+    'auth/too-many-requests':'Troppi tentativi. Riprova più tardi',
+  };
+  return map[code]||'Errore. Riprova.';
+}
+
+document.getElementById('auth-submit').addEventListener('click', async ()=>{
+  const email=document.getElementById('auth-email').value.trim();
+  const pwd=document.getElementById('auth-pwd').value;
+  if(!email||!pwd){ showAuthError('Inserisci email e password'); return; }
+  try{
+    await signInWithEmailAndPassword(auth, email, pwd);
+  }catch(e){ showAuthError(authErrorMsg(e.code)); }
+});
+
+document.getElementById('auth-register').addEventListener('click', async ()=>{
+  const email=document.getElementById('auth-email').value.trim();
+  const pwd=document.getElementById('auth-pwd').value;
+  if(!email||!pwd){ showAuthError('Inserisci email e password'); return; }
+  if(pwd.length<6){ showAuthError('Password minimo 6 caratteri'); return; }
+  try{
+    await createUserWithEmailAndPassword(auth, email, pwd);
+    showToast('Account creato ✓');
+  }catch(e){ showAuthError(authErrorMsg(e.code)); }
+});
+
+document.getElementById('auth-pwd').addEventListener('keydown', e=>{
+  if(e.key==='Enter') document.getElementById('auth-submit').click();
+});
+
+// Firebase Auth state — source of truth for login
+onAuthStateChanged(auth, user=>{
+  currentUser=user;
+  if(user){
+    document.getElementById('auth-screen').style.display='none';
     document.getElementById('app').style.display='';
     init();
   } else {
-    document.getElementById('lock-err').textContent='Password errata. Riprova.';
-    document.getElementById('lock-pwd').value='';
+    document.getElementById('auth-screen').style.display='flex';
+    document.getElementById('app').style.display='none';
   }
-}
-document.getElementById('lock-submit').addEventListener('click', checkPwd);
-document.getElementById('lock-pwd').addEventListener('keydown', e=>{ if(e.key==='Enter') checkPwd(); });
+});
 
-function changePwd(){
-  const np=prompt('Nuova password (min 4 caratteri):');
-  if(!np||np.length<4){ showToast('Password troppo corta'); return; }
-  if(np!==prompt('Ripeti la nuova password:')){ showToast('Le password non coincidono'); return; }
-  pwdHash=hash(np); localStorage.setItem('cpwdh',pwdHash);
-  showToast('Password aggiornata ✓'); closeOverlay();
-}
-
-if(sessionStorage.getItem('cauth')==='1'){
-  document.getElementById('lock-screen').style.display='none';
-  document.getElementById('app').style.display='';
+async function signOutUser(){
+  await signOut(auth);
+  closeOverlay();
+  showToast('Disconnesso');
 }
 
 // ─── CONSTANTS ───────────────────────────────────────────────
@@ -294,29 +335,24 @@ async function fbDel(path){ setSyncDot('syncing'); await remove(ref(db,path)); }
 
 // ─── INIT + LISTENERS ────────────────────────────────────────
 function init(){
-  const auth = getAuth(fbApp);
+  onValue(winesRef, snap=>{
+    const d=snap.val();
+    wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
+    wines.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    setSyncDot('online'); renderContent();
+  }, ()=>{ setSyncDot('error'); showToast('Errore connessione'); });
+
+  onValue(consumedRef, snap=>{
+    const d=snap.val();
+    consumed=d?Object.entries(d).map(([id,c])=>({...c,id})):[];
+    consumed.sort((a,b)=>(b.date||0)-(a.date||0));
+    renderContent();
+  });
+
   buildShell();
-  if(sessionStorage.getItem('cauth')==='1') renderContent();
-
-  // Prima il login anonimo, poi i listener — altrimenti Firebase rifiuta le letture
-  signInAnonymously(auth).then(()=>{
-    onValue(winesRef, snap=>{
-      const d=snap.val();
-      wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
-      wines.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-      setSyncDot('online'); renderContent();
-    }, ()=>{ setSyncDot('error'); showToast('Errore connessione'); });
-
-    onValue(consumedRef, snap=>{
-      const d=snap.val();
-      consumed=d?Object.entries(d).map(([id,c])=>({...c,id})):[];
-      consumed.sort((a,b)=>(b.date||0)-(a.date||0));
-      renderContent();
-    });
-  }).catch(()=> showToast('Errore autenticazione Firebase'));
 }
 
-if(sessionStorage.getItem('cauth')==='1') init();
+// auth handled by onAuthStateChanged
 
 // ─── SHELL (rendered once) ───────────────────────────────────
 function buildShell(){
@@ -477,6 +513,7 @@ function starButtons(active){
   return Array.from({length:5},(_,i)=>`<span class="s-star${i<active?' lit':''}" data-star="${i+1}">★</span>`).join('');
 }
 function attachStarEvents(){
+  // Use requestAnimationFrame to ensure DOM is ready after showOverlay injection
   requestAnimationFrame(()=>{
     const c=document.getElementById('star-container'); if(!c) return;
     c.addEventListener('mouseover', e=>{ const s=e.target.closest('[data-star]'); if(s){ c.innerHTML=starButtons(+s.dataset.star); } });
@@ -520,6 +557,7 @@ function formSheet(){
 
 function attachFormEvents(){
   attachStarEvents();
+  // type pills — local delegation since not in overlay-root listener
   requestAnimationFrame(()=>{
     const pills=document.getElementById('type-pills'); if(!pills) return;
     pills.addEventListener('click', e=>{
@@ -616,7 +654,7 @@ document.getElementById('overlay-root').addEventListener('click', async e=>{
   }
   if(action==='menu-export'){ exportJSON(); closeOverlay(); return; }
   if(action==='menu-import'){ closeOverlay(); setTimeout(importJSON,100); return; }
-  if(action==='menu-pwd'){ changePwd(); return; }
+  if(action==='menu-logout'){ signOutUser(); return; }
 });
 
 // ─── DETAIL SHEETS ───────────────────────────────────────────
@@ -651,6 +689,8 @@ function detailSheet(id){
   </div>`;
 }
 
+// single listener below handles all overlay clicks
+
 function consumedDetailSheet(id){
   const w=consumed.find(x=>x.id===id); if(!w) return '';
   return `<div class="sheet">
@@ -682,7 +722,7 @@ function menuSheet(){
     <div class="menu-title">Gestione cantina</div>
     <div class="menu-item" data-action="menu-export"><span class="menu-icon">📤</span> Esporta dati (JSON)</div>
     <div class="menu-item" data-action="menu-import"><span class="menu-icon">📥</span> Importa dati (JSON)</div>
-    <div class="menu-item" data-action="menu-pwd"><span class="menu-icon">🔑</span> Cambia password</div>
+    <div class="menu-item" data-action="menu-logout"><span class="menu-icon">🚪</span> Esci (logout)</div>
     <div class="menu-item" data-action="close"><span class="menu-icon">✕</span> Chiudi</div>
   </div>`;
 }
