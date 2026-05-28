@@ -613,49 +613,52 @@ function drinkSheet(id){
 
 // Single unified listener — uses data-action, never confused by ancestor ids
 document.getElementById('overlay-root').addEventListener('click', async e=>{
-  // close on backdrop click
-  if(e.target.id==='overlay-bg'){ closeOverlay(); return; }
+  // data-action has priority — always check before backdrop close
   const el = e.target.closest('[data-action]');
-  if(!el) return;
-  const action = el.dataset.action;
+  if(el){
+    const action = el.dataset.action;
 
-  if(action==='close'){ closeOverlay(); return; }
-  if(action==='form-submit'){ submitForm(); return; }
+    if(action==='close'){ closeOverlay(); return; }
+    if(action==='form-submit'){ submitForm(); return; }
 
-  if(action==='drink-submit'){
-    const w=wines.find(x=>x.id===drinkId); if(!w) return;
-    const qty=+document.getElementById('d-qty').value||1;
-    const dateLabel=document.getElementById('d-date').value;
-    const notes=document.getElementById('d-notes').value;
-    const entry={wineId:drinkId,wineName:w.name,producer:w.producer||'',vintage:w.vintage||'',type:w.type||'Rosso',rating:w.rating||0,price:w.price||'',qty,dateLabel,notes};
-    const newBottles=Math.max(0,(+w.bottles||0)-qty);
-    closeOverlay();
-    try{
-      await push(consumedRef,{...entry,date:Date.now()});
-      await fbSet('wines/'+w.id,{...w,bottles:newBottles,createdAt:w.createdAt||Date.now()});
-      showToast(newBottles===0?'Ultima bottiglia bevuta 🥂':`${qty} bottiglia/e segnata/e ✓`);
-    }catch(err){ showToast('Errore'); }
+    if(action==='drink-submit'){
+      const w=wines.find(x=>x.id===drinkId); if(!w) return;
+      const qty=+document.getElementById('d-qty').value||1;
+      const dateLabel=document.getElementById('d-date').value;
+      const notes=document.getElementById('d-notes').value;
+      const entry={wineId:drinkId,wineName:w.name,producer:w.producer||'',vintage:w.vintage||'',type:w.type||'Rosso',rating:w.rating||0,price:w.price||'',qty,dateLabel,notes};
+      const newBottles=Math.max(0,(+w.bottles||0)-qty);
+      closeOverlay();
+      try{
+        await push(consumedRef,{...entry,date:Date.now()});
+        await fbSet('wines/'+w.id,{...w,bottles:newBottles,createdAt:w.createdAt||Date.now()});
+        showToast(newBottles===0?'Ultima bottiglia bevuta 🥂':`${qty} bottiglia/e segnata/e ✓`);
+      }catch(err){ showToast('Errore'); }
+      return;
+    }
+
+    if(action==='detail-edit'){ openEdit(detailId); return; }
+    if(action==='detail-drink'){ openDrink(detailId); return; }
+    if(action==='detail-delete'){
+      if(!confirm('Eliminare questo vino?')) return;
+      const wid=detailId; closeOverlay();
+      try{ await fbDel('wines/'+wid); showToast('Vino eliminato'); }catch(err){ showToast('Errore'); }
+      return;
+    }
+    if(action==='consumed-delete'){
+      if(!confirm('Rimuovere questa voce?')) return;
+      const cid=el.dataset.id; closeOverlay();
+      try{ await fbDel('consumed/'+cid); showToast('Voce rimossa'); }catch(err){ showToast('Errore'); }
+      return;
+    }
+    if(action==='menu-export'){ exportJSON(); closeOverlay(); return; }
+    if(action==='menu-import'){ closeOverlay(); setTimeout(importJSON,100); return; }
+    if(action==='menu-logout'){ signOutUser(); return; }
     return;
   }
-
-  if(action==='detail-edit'){ openEdit(detailId); return; }
-  if(action==='detail-drink'){ openDrink(detailId); return; }
-  if(action==='detail-delete'){
-    if(!confirm('Eliminare questo vino?')) return;
-    const wid=detailId; closeOverlay();
-    try{ await fbDel('wines/'+wid); showToast('Vino eliminato'); }catch(err){ showToast('Errore'); }
-    return;
-  }
-  if(action==='consumed-delete'){
-    if(!confirm('Rimuovere questa voce?')) return;
-    const cid=el.dataset.id; closeOverlay();
-    try{ await fbDel('consumed/'+cid); showToast('Voce rimossa'); }catch(err){ showToast('Errore'); }
-    return;
-  }
-  if(action==='menu-export'){ exportJSON(); closeOverlay(); return; }
-  if(action==='menu-import'){ closeOverlay(); setTimeout(importJSON,100); return; }
-  if(action==='menu-logout'){ signOutUser(); return; }
-});
+  // backdrop click — only close if clicking directly on the overlay background
+  if(e.target.id==='overlay-bg'){ closeOverlay(); }
+});;
 
 // ─── DETAIL SHEETS ───────────────────────────────────────────
 function detailSheet(id){
