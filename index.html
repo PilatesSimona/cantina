@@ -293,6 +293,7 @@ let editId=null, detailId=null, drinkId=null;
 let formData={}, drinkData={};
 let starRating=0;  // decoupled from render cycle
 let syncStatus='syncing';
+let appStarted=false;
 
 // ─── HELPERS ─────────────────────────────────────────────────
 const fmtEur = n=>'€'+(n||0).toLocaleString('it-IT',{minimumFractionDigits:0,maximumFractionDigits:0});
@@ -335,6 +336,7 @@ async function fbDel(path){ setSyncDot('syncing'); await remove(ref(db,path)); }
 
 // ─── INIT + LISTENERS ────────────────────────────────────────
 function init(){
+  if(appStarted) return; appStarted=true;
   onValue(winesRef, snap=>{
     const d=snap.val();
     wines=d?Object.entries(d).map(([id,w])=>({...w,id})):[];
@@ -612,7 +614,7 @@ function drinkSheet(id){
 }
 
 // Single unified listener — uses data-action, never confused by ancestor ids
-document.getElementById('overlay-root').addEventListener('click', async e=>{
+document.addEventListener('click', async e=>{
   // data-action has priority — always check before backdrop close
   const el = e.target.closest('[data-action]');
   if(el){
